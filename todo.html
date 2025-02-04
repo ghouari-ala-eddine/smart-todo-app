@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>مدير المهام المتقدم</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --background: #f8fafc;
+        }
+
+        body {
+            direction: rtl;
+            text-align: right;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .task-card {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(203, 213, 225, 0.3);
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .task-card::before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            background: transparent;
+            transition: 0.3s ease;
+        }
+
+        .task-card.overdue::before { background: var(--danger); }
+        .task-card.due-soon::before { background: var(--warning); }
+        .task-card.completed::before { background: var(--success); }
+
+        .task-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .time-badge {
+            font-size: 0.85rem;
+            padding: 0.35rem 1rem;
+            border-radius: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #eff6ff;
+            color: whitesmoke;
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 1.5rem;
+            right: -100%;
+            min-width: 300px;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background: white;
+            border-left: 4px solid transparent;
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .notification.show {
+            right: 1.5rem;
+        }
+
+        .notification.warning {
+            border-color: var(--warning);
+            background: #fffbeb;
+        }
+
+        .notification.danger {
+            border-color: var(--danger);
+            background: #fef2f2;
+        }
+
+        .form-control {
+            border: 2px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+        }
+
+        .task-text {
+            position: relative;
+            padding-right: 1.5rem;
+        }
+
+        .edit-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            max-width: 500px;
+            width: 90%;
+            display: none;
+        }
+
+        .edit-modal.show {
+            display: block;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .modal-backdrop.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- الإشعارات -->
+        <div class="notification" id="overdueAlert">
+            <i class="fas fa-bell"></i>
+            <div>
+                <h6 class="mb-0" id="alertTitle"></h6>
+                <small id="alertMessage"></small>
+            </div>
+        </div>
+
+        <!-- نموذج التعديل -->
+        <div class="edit-modal" id="editModal">
+            <div class="modal-header mb-3">
+                <h5 class="modal-title">✏️ تعديل المهمة</h5>
+            </div>
+            <form id="editForm">
+                <div class="mb-3">
+                    <input type="text" id="editTaskInput" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <input type="datetime-local" id="editDueDate" class="form-control">
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary flex-grow-1" onclick="closeEditModal()">إلغاء</button>
+                    <button type="submit" class="btn btn-primary flex-grow-1">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+        <div class="modal-backdrop" id="modalBackdrop"></div>
+
+        <!-- البطاقة الرئيسية -->
+        <div class="header-card">
+            <div class="card-body p-4">
+                <h1 class="h3 mb-4 text-center text-gray-800">📝 قائمة المهام الذكية</h1>
+                <form id="todoForm" class="row g-3 align-items-center">
+                    <div class="col-md-6">
+                        <input type="text" id="taskInput" class="form-control" 
+                               placeholder="أدخل مهمة جديدة..." required>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="datetime-local" id="dueDate" class="form-control">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-plus me-2"></i>إضافة
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- قائمة المهام -->
+        <div id="todoList" class="mt-4"></div>
+    </div>
+
+    <script>
+        let currentEditId = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const todoForm = document.getElementById('todoForm');
+            const taskInput = document.getElementById('taskInput');
+            const dueDateInput = document.getElementById('dueDate');
+            const todoList = document.getElementById('todoList');
+            const overdueAlert = document.getElementById('overdueAlert');
+
+            // تحميل البيانات من التخزين المحلي
+            let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+            tasks = tasks.map(task => ({
+                ...task,
+                dueDate: task.dueDate ? new Date(task.dueDate) : null,
+                completed: task.completed || false,
+                overdue: task.overdue || false,
+                notified: task.notified || false
+            }));
+
+            // حفظ البيانات وتحديث الواجهة
+            const saveData = () => {
+                localStorage.setItem('tasks', JSON.stringify(tasks));
+                renderTasks();
+                checkDeadlines();
+            };
+
+            // عرض المهام
+            const renderTasks = () => {
+                todoList.innerHTML = tasks.map(task => `
+                    <div class="task-card card ${getStatusClass(task)}" data-id="${task.id}">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start gap-3">
+                                <input type="checkbox" ${task.completed ? 'checked' : ''} 
+                                       class="form-check-input mt-1 task-check">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="task-text ${task.completed ? 'text-muted' : 'fw-bold'}">
+                                            ${task.text}
+                                        </span>
+                                        ${task.dueDate ? `
+                                            <span class="time-badge ${getBadgeClass(task)}">
+                                                <i class="fas ${getTimeIcon(task)}"></i>
+                                                ${getRemainingTime(task)}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                    ${task.dueDate ? `
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-2"></i>
+                                            ${formatDate(task.dueDate)}
+                                        </small>
+                                    ` : ''}
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-warning edit-btn">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger delete-btn">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            };
+
+            // تنسيق التاريخ
+            const formatDate = (date) => date.toLocaleString('ar-EG', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric'
+            });
+
+            // حساب الوقت المتبقي
+            const getRemainingTime = (task) => {
+                if (task.completed) return 'مكتملة';
+                if (!task.dueDate) return '';
+                
+                const now = new Date();
+                const diff = task.dueDate - now;
+                
+                if (diff < 0) return 'منتهية';
+                
+                const minutes = Math.floor(diff / 60000);
+                return minutes < 60 ? `${minutes} دقيقة` :
+                       minutes < 1440 ? `${Math.floor(minutes/60)} ساعة` :
+                       `${Math.floor(minutes/1440)} يوم`;
+            };
+
+            // تحديد فئة الحالة
+            const getStatusClass = (task) => {
+                if (task.completed) return 'completed';
+                if (!task.dueDate) return '';
+                
+                const diff = task.dueDate - new Date();
+                return diff < 0 ? 'overdue' : diff < 900000 ? 'due-soon' : '';
+            };
+
+            // تحديد لون البادجة
+            const getBadgeClass = (task) => {
+                if (task.completed) return 'bg-success';
+                const diff = task.dueDate - new Date();
+                return diff < 0 ? 'bg-danger' : diff < 900000 ? 'bg-warning' : 'bg-primary';
+            };
+
+            // تحديد الأيقونة
+            const getTimeIcon = (task) => {
+                if (task.completed) return 'fa-check-circle';
+                const diff = task.dueDate - new Date();
+                return diff < 0 ? 'fa-exclamation-triangle' : diff < 900000 ? 'fa-clock' : 'fa-calendar-day';
+            };
+
+            // التحقق من المواعيد
+            const checkDeadlines = () => {
+                tasks.forEach(task => {
+                    if (task.completed || !task.dueDate) return;
+                    
+                    const now = new Date();
+                    const diff = task.dueDate - now;
+
+                    if (diff < 0 && !task.overdue) {
+                        showNotification(`انتهى وقت "${task.text}"`, 'danger');
+                        task.overdue = true;
+                    }
+
+                    if (diff > 0 && diff < 900000 && !task.notified) {
+                        showNotification(`اقتراب موعد "${task.text}"`, 'warning');
+                        task.notified = true;
+                    }
+                });
+                saveData();
+            };
+
+            // عرض الإشعارات
+            const showNotification = (message, type) => {
+                const title = type === 'danger' ? 'انتهى الموعد!' : 'تنبيه مهم!';
+                overdueAlert.querySelector('#alertTitle').textContent = title;
+                overdueAlert.querySelector('#alertMessage').textContent = message;
+                
+                overdueAlert.className = `notification ${type} show`;
+                setTimeout(() => {
+                    overdueAlert.classList.remove('show');
+                }, 5000);
+            };
+
+            // إضافة مهمة جديدة
+            todoForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (!taskInput.value.trim()) return;
+
+                tasks.push({
+                    id: Date.now(),
+                    text: taskInput.value,
+                    dueDate: dueDateInput.value ? new Date(dueDateInput.value) : null,
+                    completed: false,
+                    overdue: false,
+                    notified: false
+                });
+
+                taskInput.value = '';
+                dueDateInput.value = '';
+                saveData();
+            });
+
+            // حذف المهام
+            todoList.addEventListener('click', (e) => {
+                if (e.target.closest('.delete-btn')) {
+                    const taskId = Number(e.target.closest('.task-card').dataset.id);
+                    tasks = tasks.filter(t => t.id !== taskId);
+                    saveData();
+                }
+            });
+
+            // تغيير حالة الإكمال
+            todoList.addEventListener('change', (e) => {
+                if (e.target.classList.contains('task-check')) {
+                    const taskId = Number(e.target.closest('.task-card').dataset.id);
+                    const task = tasks.find(t => t.id === taskId);
+                    task.completed = e.target.checked;
+                    saveData();
+                }
+            });
+
+            // فتح نموذج التعديل
+            const openEditModal = (task) => {
+                currentEditId = task.id;
+                document.getElementById('editTaskInput').value = task.text;
+                document.getElementById('editDueDate').value = task.dueDate ? 
+                    new Date(task.dueDate - (new Date()).getTimezoneOffset() * 60000)
+                        .toISOString().slice(0, 16) : '';
+                document.getElementById('editModal').classList.add('show');
+                document.getElementById('modalBackdrop').classList.add('show');
+            };
+
+            // حدث النقر على زر التعديل
+            todoList.addEventListener('click', (e) => {
+                if (e.target.closest('.edit-btn')) {
+                    const taskId = Number(e.target.closest('.task-card').dataset.id);
+                    const task = tasks.find(t => t.id === taskId);
+                    if (task) openEditModal(task);
+                }
+            });
+
+            // إغلاق نموذج التعديل
+            window.closeEditModal = () => {
+                document.getElementById('editModal').classList.remove('show');
+                document.getElementById('modalBackdrop').classList.remove('show');
+            };
+
+            // حفظ التعديلات
+            document.getElementById('editForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const task = tasks.find(t => t.id === currentEditId);
+                if (task) {
+                    task.text = document.getElementById('editTaskInput').value;
+                    task.dueDate = document.getElementById('editDueDate').value ?
+                        new Date(document.getElementById('editDueDate').value) : null;
+                    task.overdue = false;
+                    task.notified = false;
+                    saveData();
+                    closeEditModal();
+                }
+            });
+
+            // تحديث تلقائي كل دقيقة
+            setInterval(checkDeadlines, 60000);
+
+            // التحميل الأولي
+            saveData();
+        });
+    </script>
+</body>
+</html>
